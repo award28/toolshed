@@ -2,37 +2,36 @@
 
 This guide covers deploying ToolShed to a local server (Raspberry Pi, old laptop, NAS, etc.) with a memorable hostname like `toolshed.local`.
 
-## Option 1: Coolify (Recommended)
+## Option 1: Dokploy (Recommended)
 
-[Coolify](https://coolify.io) is a self-hosted Heroku/Vercel alternative that makes deployment simple.
+[Dokploy](https://dokploy.com) is a self-hosted PaaS that makes deployment simple with a clean UI.
 
-### Step 1: Install Coolify on Your Server
+### Step 1: Install Dokploy on Your Server
 
 ```bash
-curl -fsSL https://cdn.coollabs.io/coolify/install.sh | bash
+curl -sSL https://dokploy.com/install.sh | sh
 ```
 
-Access Coolify at `http://<server-ip>:8000` and complete the setup wizard.
+Access Dokploy at `http://<server-ip>:3000` and create your admin account.
 
 ### Step 2: Add ToolShed
 
-1. Go to **Projects** → **Add New Project**
-2. Select **GitHub** (or paste the repo URL: `https://github.com/award28/toolshed`)
-3. Coolify auto-detects the Dockerfile
-4. Configure:
-   - **Port**: 3000
-   - **Volumes**:
-     - `/app/data` → persistent storage for database
-     - `/app/uploads` → persistent storage for images
-5. Click **Deploy**
+1. Create a new **Project**
+2. Add a new **Application** → Select **Docker Compose**
+3. Choose **GitHub** as the source and connect the repo: `https://github.com/award28/toolshed`
+4. Dokploy auto-detects the `docker-compose.yml`
+5. In **Domains**, add your domain (e.g., `toolshed.local` or `toolshed.yourdomain.com`)
+6. Click **Deploy**
 
-### Step 3: Set Up Domain (Optional)
+### Step 3: Configure Volumes (Important)
 
-In the application settings:
-- Set domain to `toolshed.local` or your preferred hostname
-- Coolify handles SSL automatically for public domains
+In the application settings under **Advanced** → **Volumes**, ensure these persist:
+- `toolshed-data` → Database storage
+- `toolshed-uploads` → Image storage
 
-That's it! Coolify handles builds, restarts, and updates automatically.
+The `docker-compose.yml` already defines named volumes, so data persists across deployments.
+
+That's it! Dokploy handles builds, restarts, and updates automatically.
 
 ---
 
