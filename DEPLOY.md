@@ -2,7 +2,96 @@
 
 This guide covers deploying ToolShed to a local server (Raspberry Pi, old laptop, NAS, etc.) with a memorable hostname like `toolshed.local`.
 
-## Option 1: Simple Deployment (Recommended)
+## Option 1: Coolify (Recommended)
+
+[Coolify](https://coolify.io) is a self-hosted Heroku/Vercel alternative that makes deployment simple.
+
+### Step 1: Install Coolify on Your Server
+
+```bash
+curl -fsSL https://cdn.coollabs.io/coolify/install.sh | bash
+```
+
+Access Coolify at `http://<server-ip>:8000` and complete the setup wizard.
+
+### Step 2: Add ToolShed
+
+1. Go to **Projects** → **Add New Project**
+2. Select **GitHub** (or paste the repo URL: `https://github.com/award28/toolshed`)
+3. Coolify auto-detects the Dockerfile
+4. Configure:
+   - **Port**: 3000
+   - **Volumes**:
+     - `/app/data` → persistent storage for database
+     - `/app/uploads` → persistent storage for images
+5. Click **Deploy**
+
+### Step 3: Set Up Domain (Optional)
+
+In the application settings:
+- Set domain to `toolshed.local` or your preferred hostname
+- Coolify handles SSL automatically for public domains
+
+That's it! Coolify handles builds, restarts, and updates automatically.
+
+---
+
+## Option 2: Docker Compose
+
+The repo includes a ready-to-use `docker-compose.yml`:
+
+```bash
+# Clone the repository
+git clone https://github.com/award28/toolshed.git
+cd toolshed
+
+# Start with Docker Compose
+docker compose up -d
+```
+
+This automatically:
+- Builds the application
+- Creates persistent volumes for data and uploads
+- Restarts on failure
+- Exposes port 3000
+
+**Custom port:**
+```bash
+PORT=8080 docker compose up -d
+```
+
+**View logs:**
+```bash
+docker compose logs -f
+```
+
+**Update to latest:**
+```bash
+git pull
+docker compose up -d --build
+```
+
+---
+
+## Option 3: Automated Install Script
+
+Run the install script for a full automated setup:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/award28/toolshed/main/install.sh | bash
+```
+
+Or with options:
+```bash
+curl -fsSL https://raw.githubusercontent.com/award28/toolshed/main/install.sh | bash -s -- \
+  --yes --port 3000 --hostname toolshed
+```
+
+This installs Node.js, builds the app, sets up systemd, and configures mDNS.
+
+---
+
+## Option 4: Manual Deployment
 
 ### Prerequisites
 
@@ -128,52 +217,7 @@ Then update the service to use `PORT=80`.
 
 ---
 
-## Option 2: Docker Deployment
-
-### Create a Dockerfile
-
-```dockerfile
-FROM node:20-slim
-
-WORKDIR /app
-
-COPY package*.json ./
-RUN npm ci --only=production
-
-COPY build ./build
-COPY data ./data
-COPY uploads ./uploads
-
-ENV PORT=3000
-ENV NODE_ENV=production
-
-EXPOSE 3000
-
-CMD ["node", "build"]
-```
-
-### Build and Run
-
-```bash
-# Build the app first
-npm run build
-
-# Build Docker image
-docker build -t toolshed .
-
-# Run container
-docker run -d \
-  --name toolshed \
-  --restart unless-stopped \
-  -p 3000:3000 \
-  -v $(pwd)/data:/app/data \
-  -v $(pwd)/uploads:/app/uploads \
-  toolshed
-```
-
----
-
-## Option 3: Using a Reverse Proxy (nginx)
+## Option 5: Using a Reverse Proxy (nginx)
 
 If you want HTTPS or to run multiple services:
 

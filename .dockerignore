@@ -1,0 +1,39 @@
+# Dependencies
+node_modules
+
+# Build output (we build in Docker)
+build
+.svelte-kit
+
+# Data (should be mounted as volumes)
+data
+uploads
+
+# Development files
+.git
+.gitignore
+*.md
+!README.md
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Test
+coverage
+.nyc_output
+
+# Misc
+.env
+.env.*
+!.env.example

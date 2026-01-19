@@ -1,0 +1,26 @@
+services:
+  toolshed:
+    build: .
+    container_name: toolshed
+    restart: unless-stopped
+    ports:
+      - "${PORT:-3000}:3000"
+    volumes:
+      # Persist database and uploads
+      - toolshed-data:/app/data
+      - toolshed-uploads:/app/uploads
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000', (r) => process.exit(r.statusCode === 200 ? 0 : 1))"]
+      interval: 30s
+      timeout: 3s
+      start_period: 5s
+      retries: 3
+
+volumes:
+  toolshed-data:
+    name: toolshed-data
+  toolshed-uploads:
+    name: toolshed-uploads
