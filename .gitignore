@@ -26,3 +26,6 @@ vite.config.ts.timestamp-*
 /data/
 /uploads/
 /drizzle/
+
+# Production build
+/build/
