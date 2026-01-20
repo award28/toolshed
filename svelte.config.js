@@ -9,11 +9,6 @@ const config = {
 		adapter: adapter({
 			out: 'build'
 		}),
-		// Allow all origins for local network deployment
-		// The app is designed for local-only access, not public internet
-		csrf: {
-			trustedOrigins: ['*']
-		}
 	}
 };
 

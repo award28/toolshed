@@ -33,6 +33,9 @@ RUN mkdir -p /app/uploads
 # Set environment variables
 ENV NODE_ENV=production
 ENV PORT=3000
+# Trust proxy headers for origin detection (needed behind Traefik/nginx)
+ENV PROTOCOL_HEADER=x-forwarded-proto
+ENV HOST_HEADER=x-forwarded-host
 
 # Expose port
 EXPOSE 3000

@@ -33,8 +33,9 @@ Access Dokploy at `http://<server-ip>:3000` and create your admin account.
 4. Go to **Environment** tab and add:
    ```
    DATABASE_URL=postgresql://toolshed:password@toolshed-db:5432/toolshed
+   ORIGIN=http://toolshed.local
    ```
-   (Use the connection URL from Step 2)
+   (Use the connection URL from Step 2, and set ORIGIN to match your domain)
 5. Go to **Domains** and add your domain (e.g., `toolshed.local`)
 6. Go to **Advanced** → **Volumes** and add:
    - Container path: `/app/uploads` → Create a persistent volume for images

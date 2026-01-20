@@ -12,6 +12,11 @@ services:
       - NODE_ENV=production
       - PORT=3000
       - DATABASE_URL=postgresql://toolshed:toolshed@postgres:5432/toolshed
+      # Set ORIGIN to match your domain for CSRF protection
+      - ORIGIN=${ORIGIN:-http://localhost:3000}
+      # Trust proxy headers
+      - PROTOCOL_HEADER=x-forwarded-proto
+      - HOST_HEADER=x-forwarded-host
     depends_on:
       postgres:
         condition: service_healthy
