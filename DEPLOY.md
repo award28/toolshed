@@ -14,30 +14,50 @@ curl -sSL https://dokploy.com/install.sh | sh
 
 Access Dokploy at `http://<server-ip>:3000` and create your admin account.
 
-### Step 2: Add ToolShed
+### Step 2: Create a PostgreSQL Database
 
-1. Create a new **Project**
-2. Add a new **Application** → Select **Docker Compose**
-3. Choose **GitHub** as the source and connect the repo: `https://github.com/award28/toolshed`
-4. Dokploy auto-detects the `docker-compose.yml`
-5. In **Domains**, add your domain (e.g., `toolshed.local` or `toolshed.yourdomain.com`)
-6. Click **Deploy**
+1. In your project, click **Add Service** → **Database** → **PostgreSQL**
+2. Configure the database:
+   - Name: `toolshed-db`
+   - Database: `toolshed`
+   - User: `toolshed`
+   - Password: (choose a secure password)
+3. Click **Create**
+4. Once created, copy the **Internal Connection URL** (looks like `postgresql://toolshed:password@toolshed-db:5432/toolshed`)
 
-### Step 3: Configure Volumes (Important)
+### Step 3: Add ToolShed Application
 
-In the application settings under **Advanced** → **Volumes**, ensure these persist:
-- `toolshed-data` → Database storage
-- `toolshed-uploads` → Image storage
-
-The `docker-compose.yml` already defines named volumes, so data persists across deployments.
+1. In the same project, click **Add Service** → **Application**
+2. Choose **GitHub** and connect the repo: `https://github.com/award28/toolshed`
+3. Dokploy auto-detects the `Dockerfile`
+4. Go to **Environment** tab and add:
+   ```
+   DATABASE_URL=postgresql://toolshed:password@toolshed-db:5432/toolshed
+   ```
+   (Use the connection URL from Step 2)
+5. Go to **Domains** and add your domain (e.g., `toolshed.local`)
+6. Go to **Advanced** → **Volumes** and add:
+   - Container path: `/app/uploads` → Create a persistent volume for images
+7. Click **Deploy**
 
 That's it! Dokploy handles builds, restarts, and updates automatically.
+
+### Alternative: Docker Compose Deployment
+
+If you prefer to deploy the full stack (app + database) as a single unit:
+
+1. Add a new **Application** → Select **Docker Compose**
+2. Choose **GitHub** and connect the repo
+3. Dokploy will use the included `docker-compose.yml` which bundles PostgreSQL
+4. Configure the domain and deploy
+
+This is simpler but gives you less visibility into the database.
 
 ---
 
 ## Option 2: Docker Compose
 
-The repo includes a ready-to-use `docker-compose.yml`:
+The repo includes a ready-to-use `docker-compose.yml` with PostgreSQL:
 
 ```bash
 # Clone the repository
@@ -50,7 +70,8 @@ docker compose up -d
 
 This automatically:
 - Builds the application
-- Creates persistent volumes for data and uploads
+- Starts a PostgreSQL database
+- Creates persistent volumes for database and uploads
 - Restarts on failure
 - Exposes port 3000
 

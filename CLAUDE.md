@@ -4,14 +4,14 @@ This file provides guidance to Claude Code (claude.ai/claude-code) when working 
 
 ## Project Overview
 
-ToolShed is a local-first workshop tool inventory system built with SvelteKit, SQLite, and Drizzle ORM. It allows users to catalog tools with photos, organize them in hierarchical locations, and track borrowed status.
+ToolShed is a local-first workshop tool inventory system built with SvelteKit, PostgreSQL, and Drizzle ORM. It allows users to catalog tools with photos, organize them in hierarchical locations, and track borrowed status.
 
 ## Tech Stack
 
 - **Framework**: SvelteKit with TypeScript (Svelte 5 runes mode)
-- **Database**: SQLite via better-sqlite3 with Drizzle ORM
+- **Database**: PostgreSQL with Drizzle ORM
 - **Styling**: Tailwind CSS v4
-- **Search**: SQLite FTS5 for full-text search
+- **Search**: PostgreSQL full-text search (tsvector/tsquery)
 
 ## Common Commands
 
@@ -19,8 +19,11 @@ ToolShed is a local-first workshop tool inventory system built with SvelteKit, S
 # Install dependencies
 npm install
 
-# Start development server
-npm run dev
+# Start development server (requires DATABASE_URL env var)
+DATABASE_URL=postgresql://user:pass@localhost:5432/toolshed npm run dev
+
+# Start with Docker Compose (includes PostgreSQL)
+docker compose up -d
 
 # Type check
 npm run check
@@ -34,13 +37,12 @@ npm run build
 ### Database Schema
 
 - **locations**: Hierarchical containers (self-referential via `parentId`)
-- **tools**: Tool entries with optional location reference
-- **tools_fts**: FTS5 virtual table for full-text search (auto-synced via triggers)
+- **tools**: Tool entries with optional location reference, includes `search_vector` for FTS
 
 ### Key Files
 
-- `src/lib/db/schema.ts` - Drizzle schema definitions
-- `src/lib/db/index.ts` - Database connection and FTS helpers
+- `src/lib/db/schema.ts` - Drizzle schema definitions (PostgreSQL)
+- `src/lib/db/index.ts` - Database connection (lazy initialization) and FTS helpers
 - `src/hooks.server.ts` - Database initialization on server start
 - `src/routes/api/` - REST API endpoints
 - `src/routes/+page.svelte` - Main tool list with search/filter
@@ -54,9 +56,13 @@ RESTful endpoints under `/api/`:
 
 ### Data Storage
 
-- Database: `data/tools.db` (gitignored)
-- Images: `uploads/` directory (gitignored)
-- Both should be backed up separately from the codebase
+- Database: PostgreSQL (configured via `DATABASE_URL` environment variable)
+- Images: `uploads/` directory (gitignored, mount as volume in production)
+
+## Environment Variables
+
+- `DATABASE_URL` (required): PostgreSQL connection string
+- `PORT` (optional): Server port, defaults to 3000
 
 ## Svelte 5 Patterns
 
@@ -69,5 +75,6 @@ This project uses Svelte 5 runes:
 ## Notes
 
 - Image uploads are handled via multipart form data
-- FTS5 search uses prefix matching (query + '*')
+- PostgreSQL full-text search uses `plainto_tsquery` for natural language queries
 - Location hierarchy is traversed recursively for filtering
+- Database connection is lazy-initialized to avoid build-time errors

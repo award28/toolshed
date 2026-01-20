@@ -37,15 +37,12 @@ export const POST: RequestHandler = async ({ request }) => {
 		return json({ error: 'Name is required' }, { status: 400 });
 	}
 
-	const now = new Date().toISOString();
 	const result = await db
 		.insert(locations)
 		.values({
 			name: name.trim(),
 			description: description?.trim() || null,
-			parentId: parentId ? parseInt(parentId) : null,
-			createdAt: now,
-			updatedAt: now
+			parentId: parentId ? parseInt(parentId) : null
 		})
 		.returning();
 

@@ -36,7 +36,7 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 	}
 
 	const updateData: Record<string, unknown> = {
-		updatedAt: new Date().toISOString()
+		updatedAt: new Date()
 	};
 
 	if (name !== undefined) {

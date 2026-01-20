@@ -22,13 +22,13 @@ WORKDIR /app
 
 # Install production dependencies only
 COPY package*.json ./
-RUN npm ci --only=production && npm cache clean --force
+RUN npm ci --omit=dev && npm cache clean --force
 
 # Copy built application
 COPY --from=builder /app/build ./build
 
-# Create data directories
-RUN mkdir -p /app/data /app/uploads
+# Create uploads directory
+RUN mkdir -p /app/uploads
 
 # Set environment variables
 ENV NODE_ENV=production
@@ -38,7 +38,7 @@ ENV PORT=3000
 EXPOSE 3000
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
   CMD node -e "require('http').get('http://localhost:3000', (r) => process.exit(r.statusCode === 200 ? 0 : 1))"
 
 # Run the application

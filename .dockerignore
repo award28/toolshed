@@ -5,8 +5,7 @@ node_modules
 build
 .svelte-kit
 
-# Data (should be mounted as volumes)
-data
+# Uploads (should be mounted as volume)
 uploads
 
 # Development files

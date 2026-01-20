@@ -40,7 +40,7 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 
 	const contentType = request.headers.get('content-type') || '';
 	const updateData: Record<string, unknown> = {
-		updatedAt: new Date().toISOString()
+		updatedAt: new Date()
 	};
 
 	// Get current tool to check for old image
@@ -79,7 +79,7 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 		if (isBorrowed !== null) {
 			updateData.isBorrowed = isBorrowed === 'true';
 			if (updateData.isBorrowed) {
-				updateData.borrowedAt = new Date().toISOString();
+				updateData.borrowedAt = new Date();
 			} else {
 				updateData.borrowedAt = null;
 				updateData.borrowedBy = null;
@@ -154,7 +154,7 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 		if (body.isBorrowed !== undefined) {
 			updateData.isBorrowed = !!body.isBorrowed;
 			if (updateData.isBorrowed) {
-				updateData.borrowedAt = new Date().toISOString();
+				updateData.borrowedAt = new Date();
 			} else {
 				updateData.borrowedAt = null;
 				updateData.borrowedBy = null;

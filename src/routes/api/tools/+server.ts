@@ -48,8 +48,8 @@ export const GET: RequestHandler = async ({ url }) => {
 
 	// Handle full-text search
 	if (query && query.trim()) {
-		// Use FTS5 for search
-		const matchingIds = searchTools(query.trim() + '*');
+		// Use PostgreSQL full-text search
+		const matchingIds = await searchTools(query.trim());
 
 		if (matchingIds.length === 0) {
 			return json([]);
@@ -135,7 +135,6 @@ export const POST: RequestHandler = async ({ request }) => {
 		return json({ error: 'Label is required' }, { status: 400 });
 	}
 
-	const now = new Date().toISOString();
 	const result = await db
 		.insert(tools)
 		.values({
@@ -144,9 +143,7 @@ export const POST: RequestHandler = async ({ request }) => {
 			notes: notes?.trim() || null,
 			imagePath,
 			locationId,
-			isBorrowed: false,
-			createdAt: now,
-			updatedAt: now
+			isBorrowed: false
 		})
 		.returning();
 

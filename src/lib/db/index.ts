@@ -1,122 +1,107 @@
-import Database from 'better-sqlite3';
-import { drizzle, type BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
+import pg from 'pg';
+import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres';
 import * as schema from './schema';
-import path from 'path';
+
+const { Pool } = pg;
 
 // Lazy initialization to avoid build-time database connection
-let sqlite: Database.Database | null = null;
-let _db: BetterSQLite3Database<typeof schema> | null = null;
+let pool: pg.Pool | null = null;
+let _db: NodePgDatabase<typeof schema> | null = null;
 
-function getDatabase(): Database.Database {
-	if (!sqlite) {
-		const dbPath = path.resolve('data/tools.db');
-		sqlite = new Database(dbPath);
-		// Enable WAL mode for better concurrent performance
-		sqlite.pragma('journal_mode = WAL');
+function getPool(): pg.Pool {
+	if (!pool) {
+		const connectionString = process.env.DATABASE_URL;
+		if (!connectionString) {
+			throw new Error('DATABASE_URL environment variable is required');
+		}
+		pool = new Pool({ connectionString });
 	}
-	return sqlite;
+	return pool;
 }
 
-export function getDb(): BetterSQLite3Database<typeof schema> {
+export function getDb(): NodePgDatabase<typeof schema> {
 	if (!_db) {
-		_db = drizzle(getDatabase(), { schema });
+		_db = drizzle(getPool(), { schema });
 	}
 	return _db;
 }
 
 // Keep db export for backwards compatibility, but as a getter
-export const db = new Proxy({} as BetterSQLite3Database<typeof schema>, {
+export const db = new Proxy({} as NodePgDatabase<typeof schema>, {
 	get(_, prop) {
 		return (getDb() as any)[prop];
 	}
 });
 
-// Initialize database tables and FTS
-export function initializeDatabase() {
-	// Create locations table
-	getDatabase().exec(`
-		CREATE TABLE IF NOT EXISTS locations (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			name TEXT NOT NULL,
-			description TEXT,
-			parent_id INTEGER REFERENCES locations(id) ON DELETE SET NULL,
-			created_at TEXT NOT NULL DEFAULT (datetime('now')),
-			updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-		)
-	`);
+// Initialize database tables
+export async function initializeDatabase() {
+	const client = await getPool().connect();
+	try {
+		// Create locations table
+		await client.query(`
+			CREATE TABLE IF NOT EXISTS locations (
+				id SERIAL PRIMARY KEY,
+				name TEXT NOT NULL,
+				description TEXT,
+				parent_id INTEGER REFERENCES locations(id) ON DELETE SET NULL,
+				created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+				updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+			)
+		`);
 
-	// Create tools table
-	getDatabase().exec(`
-		CREATE TABLE IF NOT EXISTS tools (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			label TEXT NOT NULL,
-			description TEXT,
-			notes TEXT,
-			image_path TEXT,
-			location_id INTEGER REFERENCES locations(id) ON DELETE SET NULL,
-			is_borrowed INTEGER DEFAULT 0,
-			borrowed_by TEXT,
-			borrowed_at TEXT,
-			created_at TEXT NOT NULL DEFAULT (datetime('now')),
-			updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-		)
-	`);
+		// Create tools table
+		await client.query(`
+			CREATE TABLE IF NOT EXISTS tools (
+				id SERIAL PRIMARY KEY,
+				label TEXT NOT NULL,
+				description TEXT,
+				notes TEXT,
+				image_path TEXT,
+				location_id INTEGER REFERENCES locations(id) ON DELETE SET NULL,
+				is_borrowed BOOLEAN DEFAULT FALSE,
+				borrowed_by TEXT,
+				borrowed_at TIMESTAMP,
+				created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+				updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+				search_vector TSVECTOR GENERATED ALWAYS AS (
+					to_tsvector('english', coalesce(label, '') || ' ' || coalesce(description, '') || ' ' || coalesce(notes, ''))
+				) STORED
+			)
+		`);
 
-	// Create FTS5 virtual table for full-text search on tools
-	getDatabase().exec(`
-		CREATE VIRTUAL TABLE IF NOT EXISTS tools_fts USING fts5(
-			label,
-			description,
-			notes,
-			content='tools',
-			content_rowid='id'
-		)
-	`);
+		// Create index for full-text search
+		await client.query(`
+			CREATE INDEX IF NOT EXISTS idx_tools_search ON tools USING GIN(search_vector)
+		`);
 
-	// Create triggers to keep FTS in sync with tools table
-	getDatabase().exec(`
-		CREATE TRIGGER IF NOT EXISTS tools_ai AFTER INSERT ON tools BEGIN
-			INSERT INTO tools_fts(rowid, label, description, notes)
-			VALUES (new.id, new.label, new.description, new.notes);
-		END
-	`);
+		// Create index on location_id for faster location-based queries
+		await client.query(`
+			CREATE INDEX IF NOT EXISTS idx_tools_location ON tools(location_id)
+		`);
 
-	getDatabase().exec(`
-		CREATE TRIGGER IF NOT EXISTS tools_ad AFTER DELETE ON tools BEGIN
-			INSERT INTO tools_fts(tools_fts, rowid, label, description, notes)
-			VALUES ('delete', old.id, old.label, old.description, old.notes);
-		END
-	`);
-
-	getDatabase().exec(`
-		CREATE TRIGGER IF NOT EXISTS tools_au AFTER UPDATE ON tools BEGIN
-			INSERT INTO tools_fts(tools_fts, rowid, label, description, notes)
-			VALUES ('delete', old.id, old.label, old.description, old.notes);
-			INSERT INTO tools_fts(rowid, label, description, notes)
-			VALUES (new.id, new.label, new.description, new.notes);
-		END
-	`);
-
-	// Create index on location_id for faster location-based queries
-	getDatabase().exec(`
-		CREATE INDEX IF NOT EXISTS idx_tools_location ON tools(location_id)
-	`);
-
-	getDatabase().exec(`
-		CREATE INDEX IF NOT EXISTS idx_locations_parent ON locations(parent_id)
-	`);
+		await client.query(`
+			CREATE INDEX IF NOT EXISTS idx_locations_parent ON locations(parent_id)
+		`);
+	} finally {
+		client.release();
+	}
 }
 
-// Full-text search helper
-export function searchTools(query: string): number[] {
-	const stmt = getDatabase().prepare(`
-		SELECT rowid FROM tools_fts WHERE tools_fts MATCH ? ORDER BY rank
-	`);
-	const results = stmt.all(query) as { rowid: number }[];
-	return results.map((r) => r.rowid);
+// Full-text search helper - returns matching tool IDs
+export async function searchTools(query: string): Promise<number[]> {
+	const client = await getPool().connect();
+	try {
+		const result = await client.query(
+			`SELECT id FROM tools WHERE search_vector @@ plainto_tsquery('english', $1) ORDER BY ts_rank(search_vector, plainto_tsquery('english', $1)) DESC`,
+			[query]
+		);
+		return result.rows.map((r: { id: number }) => r.id);
+	} finally {
+		client.release();
+	}
 }
 
-// Get raw sqlite instance for custom queries
+// Get raw pool instance for custom queries
 export function getRawDb() {
-	return getDatabase();
+	return getPool();
 }
