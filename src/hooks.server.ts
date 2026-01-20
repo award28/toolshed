@@ -1,5 +1,6 @@
 import { initializeDatabase } from '$lib/db';
 import { logger, createRequestLogger } from '$lib/logger';
+import { httpRequestDuration, httpRequestsTotal } from '$lib/metrics';
 
 // Initialize database on server start
 let initialized = false;
@@ -29,16 +30,28 @@ export async function handle({ event, resolve }) {
 		'Incoming request'
 	);
 
+	// Normalize route for metrics (replace IDs with :id)
+	const route = event.url.pathname.replace(/\/\d+/g, '/:id');
+
 	try {
 		const response = await resolve(event);
 
-		const duration = Math.round(performance.now() - startTime);
+		const durationMs = Math.round(performance.now() - startTime);
+		const durationSec = durationMs / 1000;
+
+		// Record metrics
+		httpRequestDuration.observe(
+			{ method: event.request.method, route, status_code: response.status },
+			durationSec
+		);
+		httpRequestsTotal.inc({ method: event.request.method, route, status_code: response.status });
+
 		log.info(
 			{
 				method: event.request.method,
 				url: event.url.pathname,
 				status: response.status,
-				duration
+				duration: durationMs
 			},
 			'Request completed'
 		);
@@ -47,12 +60,21 @@ export async function handle({ event, resolve }) {
 		response.headers.set('X-Request-ID', requestId);
 		return response;
 	} catch (error) {
-		const duration = Math.round(performance.now() - startTime);
+		const durationMs = Math.round(performance.now() - startTime);
+		const durationSec = durationMs / 1000;
+
+		// Record error metrics
+		httpRequestDuration.observe(
+			{ method: event.request.method, route, status_code: 500 },
+			durationSec
+		);
+		httpRequestsTotal.inc({ method: event.request.method, route, status_code: 500 });
+
 		log.error(
 			{
 				method: event.request.method,
 				url: event.url.pathname,
-				duration,
+				duration: durationMs,
 				error: error instanceof Error ? error.message : String(error),
 				stack: error instanceof Error ? error.stack : undefined
 			},

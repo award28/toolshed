@@ -4,6 +4,7 @@ import { locations } from '$lib/db/schema';
 import { eq, isNull } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import { logger } from '$lib/logger';
+import { locationOperations } from '$lib/metrics';
 
 // GET /api/locations - List all locations with hierarchy
 export const GET: RequestHandler = async ({ url }) => {
@@ -49,6 +50,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		})
 		.returning();
 
+	locationOperations.inc({ operation: 'create' });
 	log.info({ locationId: result[0].id, name: result[0].name, parentId }, 'Location created');
 	return json(result[0], { status: 201 });
 };

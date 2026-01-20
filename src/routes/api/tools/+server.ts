@@ -7,6 +7,7 @@ import { writeFile, mkdir } from 'fs/promises';
 import path from 'path';
 import type { RequestHandler } from './$types';
 import { logger } from '$lib/logger';
+import { toolOperations, imageUploads, searchQueries } from '$lib/metrics';
 
 // Get all descendant location IDs (including the given location)
 async function getLocationAndDescendants(locationId: number): Promise<number[]> {
@@ -50,6 +51,7 @@ export const GET: RequestHandler = async ({ url }) => {
 	// Handle full-text search
 	if (query && query.trim()) {
 		// Use PostgreSQL full-text search
+		searchQueries.inc();
 		const matchingIds = await searchTools(query.trim());
 
 		if (matchingIds.length === 0) {
@@ -124,6 +126,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 				await writeFile(path.join(uploadsDir, filename), buffer);
 
 				imagePath = `/uploads/${filename}`;
+				imageUploads.inc({ status: 'success' });
 				log.debug({ filename, size: image.size }, 'Image saved');
 			}
 		} else {
@@ -152,6 +155,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			})
 			.returning();
 
+		toolOperations.inc({ operation: 'create' });
 		log.info({ toolId: result[0].id, label: result[0].label }, 'Tool created');
 		return json(result[0], { status: 201 });
 	} catch (error) {
@@ -159,6 +163,9 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			{ error: error instanceof Error ? error.message : String(error) },
 			'Failed to create tool'
 		);
+		if (imagePath) {
+			imageUploads.inc({ status: 'failure' });
+		}
 		return json({ error: 'Failed to create tool' }, { status: 500 });
 	}
 };

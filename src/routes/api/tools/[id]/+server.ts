@@ -7,6 +7,7 @@ import { writeFile, unlink, mkdir } from 'fs/promises';
 import path from 'path';
 import type { RequestHandler } from './$types';
 import { logger } from '$lib/logger';
+import { toolOperations, imageUploads } from '$lib/metrics';
 
 // GET /api/tools/:id - Get single tool with location info
 export const GET: RequestHandler = async ({ params }) => {
@@ -116,6 +117,7 @@ export const PUT: RequestHandler = async ({ params, request, locals }) => {
 			await writeFile(path.join(uploadsDir, filename), buffer);
 
 			updateData.imagePath = `/uploads/${filename}`;
+			imageUploads.inc({ status: 'success' });
 		}
 
 		// Check for removeImage flag
@@ -170,6 +172,15 @@ export const PUT: RequestHandler = async ({ params, request, locals }) => {
 
 	const result = await db.update(tools).set(updateData).where(eq(tools.id, id)).returning();
 
+	// Track specific operations
+	if (updateData.isBorrowed === true) {
+		toolOperations.inc({ operation: 'borrow' });
+	} else if (updateData.isBorrowed === false) {
+		toolOperations.inc({ operation: 'return' });
+	} else {
+		toolOperations.inc({ operation: 'update' });
+	}
+
 	log.info({ toolId: id, fields: Object.keys(updateData) }, 'Tool updated');
 	return json(result[0]);
 };
@@ -201,6 +212,7 @@ export const DELETE: RequestHandler = async ({ params, locals }) => {
 
 	await db.delete(tools).where(eq(tools.id, id));
 
+	toolOperations.inc({ operation: 'delete' });
 	log.info({ toolId: id, label: currentTool[0].label }, 'Tool deleted');
 	return json({ success: true });
 };

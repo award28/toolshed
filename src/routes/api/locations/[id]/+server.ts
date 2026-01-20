@@ -4,6 +4,7 @@ import { locations } from '$lib/db/schema';
 import { eq } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import { logger } from '$lib/logger';
+import { locationOperations } from '$lib/metrics';
 
 // GET /api/locations/:id - Get single location
 export const GET: RequestHandler = async ({ params }) => {
@@ -67,6 +68,7 @@ export const PUT: RequestHandler = async ({ params, request, locals }) => {
 		throw error(404, 'Location not found');
 	}
 
+	locationOperations.inc({ operation: 'update' });
 	log.info({ locationId: id, fields: Object.keys(updateData) }, 'Location updated');
 	return json(result[0]);
 };
@@ -85,6 +87,7 @@ export const DELETE: RequestHandler = async ({ params, locals }) => {
 		throw error(404, 'Location not found');
 	}
 
+	locationOperations.inc({ operation: 'delete' });
 	log.info({ locationId: id, name: result[0].name }, 'Location deleted');
 	return json({ success: true });
 };
