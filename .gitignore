@@ -25,6 +25,9 @@ vite.config.ts.timestamp-*
 # Uploads (images)
 /uploads/
 
+# Old SQLite data (no longer used, but keep ignored)
+/data/
+
 # Drizzle migrations
 /drizzle/
 
