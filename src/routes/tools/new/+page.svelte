@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { toast } from '$lib/stores/toast';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -11,7 +12,6 @@
 	let imageFile = $state<File | null>(null);
 	let imagePreview = $state<string | null>(null);
 	let saving = $state(false);
-	let error = $state('');
 
 	function handleImageChange(event: Event) {
 		const input = event.target as HTMLInputElement;
@@ -36,31 +36,36 @@
 		event.preventDefault();
 
 		if (!label.trim()) {
-			error = 'Label is required';
+			toast.error('Label is required');
 			return;
 		}
 
 		saving = true;
-		error = '';
 
-		const formData = new FormData();
-		formData.append('label', label.trim());
-		formData.append('description', description.trim());
-		formData.append('notes', notes.trim());
-		if (locationId) formData.append('locationId', locationId);
-		if (imageFile) formData.append('image', imageFile);
+		try {
+			const formData = new FormData();
+			formData.append('label', label.trim());
+			formData.append('description', description.trim());
+			formData.append('notes', notes.trim());
+			if (locationId) formData.append('locationId', locationId);
+			if (imageFile) formData.append('image', imageFile);
 
-		const response = await fetch('/api/tools', {
-			method: 'POST',
-			body: formData
-		});
+			const response = await fetch('/api/tools', {
+				method: 'POST',
+				body: formData
+			});
 
-		if (response.ok) {
-			const tool = await response.json();
-			goto(`/tools/${tool.id}`);
-		} else {
-			const data = await response.json();
-			error = data.error || 'Failed to create tool';
+			if (response.ok) {
+				const tool = await response.json();
+				toast.success('Tool created successfully');
+				goto(`/tools/${tool.id}`);
+			} else {
+				const errorData = await response.json().catch(() => ({}));
+				toast.error(errorData.error || `Failed to create tool (${response.status})`);
+			}
+		} catch (err) {
+			toast.error('Network error. Please check your connection and try again.');
+		} finally {
 			saving = false;
 		}
 	}
@@ -95,12 +100,6 @@
 	</nav>
 
 	<h1 class="text-2xl font-bold mb-6">Add New Tool</h1>
-
-	{#if error}
-		<div class="mb-4 p-4 bg-destructive/10 text-destructive rounded-md">
-			{error}
-		</div>
-	{/if}
 
 	<form onsubmit={handleSubmit} class="space-y-6">
 		<!-- Image Upload -->

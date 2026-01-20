@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { invalidateAll } from '$app/navigation';
+	import { toast } from '$lib/stores/toast';
 	import type { PageData } from './$types';
 	import type { Location } from '$lib/db/schema';
 
@@ -17,7 +18,6 @@
 	let editDescription = $state('');
 
 	let saving = $state(false);
-	let error = $state('');
 
 	// Build hierarchical tree structure
 	function buildTree(
@@ -36,34 +36,39 @@
 
 	async function addLocation() {
 		if (!newName.trim()) {
-			error = 'Name is required';
+			toast.error('Name is required');
 			return;
 		}
 
 		saving = true;
-		error = '';
 
-		const response = await fetch('/api/locations', {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({
-				name: newName.trim(),
-				description: newDescription.trim() || null,
-				parentId: addParentId
-			})
-		});
+		try {
+			const response = await fetch('/api/locations', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					name: newName.trim(),
+					description: newDescription.trim() || null,
+					parentId: addParentId
+				})
+			});
 
-		if (response.ok) {
-			newName = '';
-			newDescription = '';
-			showAddForm = false;
-			addParentId = null;
-			await invalidateAll();
-		} else {
-			const responseData = await response.json();
-			error = responseData.error || 'Failed to create location';
+			if (response.ok) {
+				newName = '';
+				newDescription = '';
+				showAddForm = false;
+				addParentId = null;
+				toast.success('Location created');
+				await invalidateAll();
+			} else {
+				const errorData = await response.json().catch(() => ({}));
+				toast.error(errorData.error || 'Failed to create location');
+			}
+		} catch (err) {
+			toast.error('Network error. Please try again.');
+		} finally {
+			saving = false;
 		}
-		saving = false;
 	}
 
 	function startEdit(loc: LocationWithCount) {
@@ -80,55 +85,66 @@
 
 	async function saveEdit() {
 		if (!editName.trim()) {
-			error = 'Name is required';
+			toast.error('Name is required');
 			return;
 		}
 
 		saving = true;
-		error = '';
 
-		const response = await fetch(`/api/locations/${editingId}`, {
-			method: 'PUT',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({
-				name: editName.trim(),
-				description: editDescription.trim() || null
-			})
-		});
+		try {
+			const response = await fetch(`/api/locations/${editingId}`, {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					name: editName.trim(),
+					description: editDescription.trim() || null
+				})
+			});
 
-		if (response.ok) {
-			cancelEdit();
-			await invalidateAll();
-		} else {
-			const responseData = await response.json();
-			error = responseData.error || 'Failed to update location';
+			if (response.ok) {
+				cancelEdit();
+				toast.success('Location updated');
+				await invalidateAll();
+			} else {
+				const errorData = await response.json().catch(() => ({}));
+				toast.error(errorData.error || 'Failed to update location');
+			}
+		} catch (err) {
+			toast.error('Network error. Please try again.');
+		} finally {
+			saving = false;
 		}
-		saving = false;
 	}
 
 	async function deleteLocation(loc: LocationWithCount) {
 		if (loc.toolCount > 0) {
-			alert(`Cannot delete "${loc.name}" because it contains ${loc.toolCount} tool(s). Move or delete the tools first.`);
+			toast.error(`Cannot delete "${loc.name}" because it contains ${loc.toolCount} tool(s). Move or delete the tools first.`);
 			return;
 		}
 
 		// Check for children
 		const children = data.locations.filter((l) => l.parentId === loc.id);
 		if (children.length > 0) {
-			alert(`Cannot delete "${loc.name}" because it contains sub-locations. Delete the sub-locations first.`);
+			toast.error(`Cannot delete "${loc.name}" because it contains sub-locations. Delete the sub-locations first.`);
 			return;
 		}
 
 		if (!confirm(`Are you sure you want to delete "${loc.name}"?`)) return;
 
-		const response = await fetch(`/api/locations/${loc.id}`, {
-			method: 'DELETE'
-		});
+		try {
+			const response = await fetch(`/api/locations/${loc.id}`, {
+				method: 'DELETE'
+			});
 
-		if (response.ok) {
-			await invalidateAll();
-		} else {
-			alert('Failed to delete location');
+			if (response.ok) {
+				toast.success('Location deleted');
+				await invalidateAll();
+			} else {
+				const errorData = await response.json().catch(() => ({}));
+				toast.error(errorData.error || 'Failed to delete location');
+			}
+		} catch (err) {
+			toast.error('Network error. Please try again.');
 		}
 	}
 
@@ -160,12 +176,6 @@
 		Organize your tools by creating a hierarchy of locations (e.g., Garage → Workbench → Top
 		Drawer).
 	</p>
-
-	{#if error}
-		<div class="mb-4 p-4 bg-destructive/10 text-destructive rounded-md">
-			{error}
-		</div>
-	{/if}
 
 	<!-- Add Location Form -->
 	{#if showAddForm}

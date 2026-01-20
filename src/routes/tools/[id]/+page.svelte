@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { toast } from '$lib/stores/toast';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -11,43 +12,56 @@
 	let borrowedBy = $state(tool.borrowedBy || '');
 	let showBorrowedInput = $state(false);
 	let updating = $state(false);
-	let justUpdated = $state(false);
 
 	async function deleteTool() {
 		if (!confirm('Are you sure you want to delete this tool?')) return;
 
 		deleting = true;
-		const response = await fetch(`/api/tools/${tool.id}`, {
-			method: 'DELETE'
-		});
+		try {
+			const response = await fetch(`/api/tools/${tool.id}`, {
+				method: 'DELETE'
+			});
 
-		if (response.ok) {
-			goto('/');
-		} else {
+			if (response.ok) {
+				toast.success('Tool deleted');
+				goto('/');
+			} else {
+				const errorData = await response.json().catch(() => ({}));
+				toast.error(errorData.error || 'Failed to delete tool');
+			}
+		} catch (err) {
+			toast.error('Network error. Please try again.');
+		} finally {
 			deleting = false;
-			alert('Failed to delete tool');
 		}
 	}
 
 	async function markAsReturned() {
 		updating = true;
-		const response = await fetch(`/api/tools/${tool.id}`, {
-			method: 'PUT',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({
-				isBorrowed: false,
-				borrowedBy: null
-			})
-		});
+		try {
+			const response = await fetch(`/api/tools/${tool.id}`, {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					isBorrowed: false,
+					borrowedBy: null
+				})
+			});
 
-		if (response.ok) {
-			const updated = await response.json();
-			tool = { ...tool, ...updated };
-			borrowedBy = '';
-			justUpdated = true;
-			setTimeout(() => (justUpdated = false), 2000);
+			if (response.ok) {
+				const updated = await response.json();
+				tool = { ...tool, ...updated };
+				borrowedBy = '';
+				toast.success('Tool marked as returned');
+			} else {
+				const errorData = await response.json().catch(() => ({}));
+				toast.error(errorData.error || 'Failed to update tool');
+			}
+		} catch (err) {
+			toast.error('Network error. Please try again.');
+		} finally {
+			updating = false;
 		}
-		updating = false;
 	}
 
 	function startBorrowing() {
@@ -57,28 +71,36 @@
 
 	async function saveBorrowed() {
 		updating = true;
-		const response = await fetch(`/api/tools/${tool.id}`, {
-			method: 'PUT',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({
-				isBorrowed: true,
-				borrowedBy: borrowedBy.trim() || null
-			})
-		});
+		try {
+			const response = await fetch(`/api/tools/${tool.id}`, {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					isBorrowed: true,
+					borrowedBy: borrowedBy.trim() || null
+				})
+			});
 
-		if (response.ok) {
-			const updated = await response.json();
-			tool = { ...tool, ...updated };
-			showBorrowedInput = false;
-			justUpdated = true;
-			setTimeout(() => (justUpdated = false), 2000);
+			if (response.ok) {
+				const updated = await response.json();
+				tool = { ...tool, ...updated };
+				showBorrowedInput = false;
+				toast.success('Tool marked as borrowed');
+			} else {
+				const errorData = await response.json().catch(() => ({}));
+				toast.error(errorData.error || 'Failed to update tool');
+			}
+		} catch (err) {
+			toast.error('Network error. Please try again.');
+		} finally {
+			updating = false;
 		}
-		updating = false;
 	}
 
-	function formatDate(dateStr: string | null): string {
-		if (!dateStr) return '';
-		return new Date(dateStr).toLocaleDateString('en-US', {
+	function formatDate(date: Date | string | null): string {
+		if (!date) return '';
+		const d = typeof date === 'string' ? new Date(date) : date;
+		return d.toLocaleDateString('en-US', {
 			year: 'numeric',
 			month: 'short',
 			day: 'numeric',
@@ -148,12 +170,6 @@
 			<!-- Borrowed Status -->
 			<div>
 				<h3 class="text-sm font-medium text-muted-foreground mb-2">Status</h3>
-
-				{#if justUpdated}
-					<div class="mb-3 px-3 py-2 bg-green-100 text-green-800 rounded-md text-sm">
-						Status updated successfully
-					</div>
-				{/if}
 
 				{#if showBorrowedInput}
 					<div class="p-4 border border-border rounded-lg bg-card space-y-3">

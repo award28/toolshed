@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { toast } from '$lib/stores/toast';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -12,7 +13,6 @@
 	let imagePreview = $state<string | null>(data.tool.imagePath);
 	let removeImage = $state(false);
 	let saving = $state(false);
-	let error = $state('');
 
 	function handleImageChange(event: Event) {
 		const input = event.target as HTMLInputElement;
@@ -39,31 +39,36 @@
 		event.preventDefault();
 
 		if (!label.trim()) {
-			error = 'Label is required';
+			toast.error('Label is required');
 			return;
 		}
 
 		saving = true;
-		error = '';
 
-		const formData = new FormData();
-		formData.append('label', label.trim());
-		formData.append('description', description.trim());
-		formData.append('notes', notes.trim());
-		formData.append('locationId', locationId);
-		if (imageFile) formData.append('image', imageFile);
-		if (removeImage) formData.append('removeImage', 'true');
+		try {
+			const formData = new FormData();
+			formData.append('label', label.trim());
+			formData.append('description', description.trim());
+			formData.append('notes', notes.trim());
+			formData.append('locationId', locationId);
+			if (imageFile) formData.append('image', imageFile);
+			if (removeImage) formData.append('removeImage', 'true');
 
-		const response = await fetch(`/api/tools/${data.tool.id}`, {
-			method: 'PUT',
-			body: formData
-		});
+			const response = await fetch(`/api/tools/${data.tool.id}`, {
+				method: 'PUT',
+				body: formData
+			});
 
-		if (response.ok) {
-			goto(`/tools/${data.tool.id}`);
-		} else {
-			const responseData = await response.json();
-			error = responseData.error || 'Failed to update tool';
+			if (response.ok) {
+				toast.success('Tool updated successfully');
+				goto(`/tools/${data.tool.id}`);
+			} else {
+				const errorData = await response.json().catch(() => ({}));
+				toast.error(errorData.error || `Failed to update tool (${response.status})`);
+			}
+		} catch (err) {
+			toast.error('Network error. Please check your connection and try again.');
+		} finally {
 			saving = false;
 		}
 	}
@@ -100,12 +105,6 @@
 	</nav>
 
 	<h1 class="text-2xl font-bold mb-6">Edit Tool</h1>
-
-	{#if error}
-		<div class="mb-4 p-4 bg-destructive/10 text-destructive rounded-md">
-			{error}
-		</div>
-	{/if}
 
 	<form onsubmit={handleSubmit} class="space-y-6">
 		<!-- Image Upload -->

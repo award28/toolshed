@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { toast } from '$lib/stores/toast';
 	import type { PageData } from './$types';
 	import type { Tool, Location } from '$lib/db/schema';
 
@@ -26,15 +27,22 @@
 		if (selectedLocationId) params.set('locationId', selectedLocationId);
 		if (borrowedFilter) params.set('borrowed', borrowedFilter);
 
-		const response = await fetch(`/api/tools?${params}`);
-		tools = await response.json();
+		try {
+			const response = await fetch(`/api/tools?${params}`);
+			if (!response.ok) {
+				throw new Error(`Failed to load tools (${response.status})`);
+			}
+			tools = await response.json();
 
-		// Update total count only when no filters are active
-		if (!hasActiveFilters) {
-			totalToolCount = tools.length;
+			// Update total count only when no filters are active
+			if (!hasActiveFilters) {
+				totalToolCount = tools.length;
+			}
+		} catch (err) {
+			toast.error('Failed to load tools. Please try again.');
+		} finally {
+			loading = false;
 		}
-
-		loading = false;
 	}
 
 	function handleSearchInput() {
