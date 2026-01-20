@@ -1,21 +1,40 @@
 import Database from 'better-sqlite3';
-import { drizzle } from 'drizzle-orm/better-sqlite3';
+import { drizzle, type BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import * as schema from './schema';
-import { sql } from 'drizzle-orm';
 import path from 'path';
 
-const dbPath = path.resolve('data/tools.db');
-const sqlite = new Database(dbPath);
+// Lazy initialization to avoid build-time database connection
+let sqlite: Database.Database | null = null;
+let _db: BetterSQLite3Database<typeof schema> | null = null;
 
-// Enable WAL mode for better concurrent performance
-sqlite.pragma('journal_mode = WAL');
+function getDatabase(): Database.Database {
+	if (!sqlite) {
+		const dbPath = path.resolve('data/tools.db');
+		sqlite = new Database(dbPath);
+		// Enable WAL mode for better concurrent performance
+		sqlite.pragma('journal_mode = WAL');
+	}
+	return sqlite;
+}
 
-export const db = drizzle(sqlite, { schema });
+export function getDb(): BetterSQLite3Database<typeof schema> {
+	if (!_db) {
+		_db = drizzle(getDatabase(), { schema });
+	}
+	return _db;
+}
+
+// Keep db export for backwards compatibility, but as a getter
+export const db = new Proxy({} as BetterSQLite3Database<typeof schema>, {
+	get(_, prop) {
+		return (getDb() as any)[prop];
+	}
+});
 
 // Initialize database tables and FTS
 export function initializeDatabase() {
 	// Create locations table
-	sqlite.exec(`
+	getDatabase().exec(`
 		CREATE TABLE IF NOT EXISTS locations (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			name TEXT NOT NULL,
@@ -27,7 +46,7 @@ export function initializeDatabase() {
 	`);
 
 	// Create tools table
-	sqlite.exec(`
+	getDatabase().exec(`
 		CREATE TABLE IF NOT EXISTS tools (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			label TEXT NOT NULL,
@@ -44,7 +63,7 @@ export function initializeDatabase() {
 	`);
 
 	// Create FTS5 virtual table for full-text search on tools
-	sqlite.exec(`
+	getDatabase().exec(`
 		CREATE VIRTUAL TABLE IF NOT EXISTS tools_fts USING fts5(
 			label,
 			description,
@@ -55,21 +74,21 @@ export function initializeDatabase() {
 	`);
 
 	// Create triggers to keep FTS in sync with tools table
-	sqlite.exec(`
+	getDatabase().exec(`
 		CREATE TRIGGER IF NOT EXISTS tools_ai AFTER INSERT ON tools BEGIN
 			INSERT INTO tools_fts(rowid, label, description, notes)
 			VALUES (new.id, new.label, new.description, new.notes);
 		END
 	`);
 
-	sqlite.exec(`
+	getDatabase().exec(`
 		CREATE TRIGGER IF NOT EXISTS tools_ad AFTER DELETE ON tools BEGIN
 			INSERT INTO tools_fts(tools_fts, rowid, label, description, notes)
 			VALUES ('delete', old.id, old.label, old.description, old.notes);
 		END
 	`);
 
-	sqlite.exec(`
+	getDatabase().exec(`
 		CREATE TRIGGER IF NOT EXISTS tools_au AFTER UPDATE ON tools BEGIN
 			INSERT INTO tools_fts(tools_fts, rowid, label, description, notes)
 			VALUES ('delete', old.id, old.label, old.description, old.notes);
@@ -79,18 +98,18 @@ export function initializeDatabase() {
 	`);
 
 	// Create index on location_id for faster location-based queries
-	sqlite.exec(`
+	getDatabase().exec(`
 		CREATE INDEX IF NOT EXISTS idx_tools_location ON tools(location_id)
 	`);
 
-	sqlite.exec(`
+	getDatabase().exec(`
 		CREATE INDEX IF NOT EXISTS idx_locations_parent ON locations(parent_id)
 	`);
 }
 
 // Full-text search helper
 export function searchTools(query: string): number[] {
-	const stmt = sqlite.prepare(`
+	const stmt = getDatabase().prepare(`
 		SELECT rowid FROM tools_fts WHERE tools_fts MATCH ? ORDER BY rank
 	`);
 	const results = stmt.all(query) as { rowid: number }[];
@@ -99,5 +118,5 @@ export function searchTools(query: string): number[] {
 
 // Get raw sqlite instance for custom queries
 export function getRawDb() {
-	return sqlite;
+	return getDatabase();
 }
