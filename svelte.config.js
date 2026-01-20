@@ -9,10 +9,10 @@ const config = {
 		adapter: adapter({
 			out: 'build'
 		}),
-		// Disable CSRF origin check for local network deployment
+		// Allow all origins for local network deployment
 		// The app is designed for local-only access, not public internet
 		csrf: {
-			checkOrigin: false
+			trustedOrigins: ['*']
 		}
 	}
 };
