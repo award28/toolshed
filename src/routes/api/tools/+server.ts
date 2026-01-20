@@ -6,6 +6,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { writeFile, mkdir } from 'fs/promises';
 import path from 'path';
 import type { RequestHandler } from './$types';
+import { logger } from '$lib/logger';
 
 // Get all descendant location IDs (including the given location)
 async function getLocationAndDescendants(locationId: number): Promise<number[]> {
@@ -89,7 +90,8 @@ export const GET: RequestHandler = async ({ url }) => {
 };
 
 // POST /api/tools - Create a new tool
-export const POST: RequestHandler = async ({ request }) => {
+export const POST: RequestHandler = async ({ request, locals }) => {
+	const log = locals.log || logger;
 	const contentType = request.headers.get('content-type') || '';
 
 	let label: string;
@@ -98,54 +100,65 @@ export const POST: RequestHandler = async ({ request }) => {
 	let locationId: number | null = null;
 	let imagePath: string | null = null;
 
-	if (contentType.includes('multipart/form-data')) {
-		// Handle multipart form data with image upload
-		const formData = await request.formData();
+	try {
+		if (contentType.includes('multipart/form-data')) {
+			// Handle multipart form data with image upload
+			const formData = await request.formData();
 
-		label = formData.get('label') as string;
-		description = (formData.get('description') as string) || null;
-		notes = (formData.get('notes') as string) || null;
-		const locationIdStr = formData.get('locationId') as string;
-		locationId = locationIdStr ? parseInt(locationIdStr) : null;
+			label = formData.get('label') as string;
+			description = (formData.get('description') as string) || null;
+			notes = (formData.get('notes') as string) || null;
+			const locationIdStr = formData.get('locationId') as string;
+			locationId = locationIdStr ? parseInt(locationIdStr) : null;
 
-		const image = formData.get('image') as File | null;
-		if (image && image.size > 0) {
-			// Save the image
-			const ext = image.name.split('.').pop() || 'jpg';
-			const filename = `${uuidv4()}.${ext}`;
-			const uploadsDir = path.resolve('uploads');
+			const image = formData.get('image') as File | null;
+			if (image && image.size > 0) {
+				// Save the image
+				const ext = image.name.split('.').pop() || 'jpg';
+				const filename = `${uuidv4()}.${ext}`;
+				const uploadsDir = path.resolve('uploads');
 
-			await mkdir(uploadsDir, { recursive: true });
+				await mkdir(uploadsDir, { recursive: true });
 
-			const buffer = Buffer.from(await image.arrayBuffer());
-			await writeFile(path.join(uploadsDir, filename), buffer);
+				const buffer = Buffer.from(await image.arrayBuffer());
+				await writeFile(path.join(uploadsDir, filename), buffer);
 
-			imagePath = `/uploads/${filename}`;
+				imagePath = `/uploads/${filename}`;
+				log.debug({ filename, size: image.size }, 'Image saved');
+			}
+		} else {
+			// Handle JSON request
+			const body = await request.json();
+			label = body.label;
+			description = body.description || null;
+			notes = body.notes || null;
+			locationId = body.locationId ? parseInt(body.locationId) : null;
 		}
-	} else {
-		// Handle JSON request
-		const body = await request.json();
-		label = body.label;
-		description = body.description || null;
-		notes = body.notes || null;
-		locationId = body.locationId ? parseInt(body.locationId) : null;
+
+		if (!label || typeof label !== 'string' || label.trim() === '') {
+			log.warn('Tool creation failed: label is required');
+			return json({ error: 'Label is required' }, { status: 400 });
+		}
+
+		const result = await db
+			.insert(tools)
+			.values({
+				label: label.trim(),
+				description: description?.trim() || null,
+				notes: notes?.trim() || null,
+				imagePath,
+				locationId,
+				isBorrowed: false
+			})
+			.returning();
+
+		log.info({ toolId: result[0].id, label: result[0].label }, 'Tool created');
+		return json(result[0], { status: 201 });
+	} catch (error) {
+		log.error(
+			{ error: error instanceof Error ? error.message : String(error) },
+			'Failed to create tool'
+		);
+		return json({ error: 'Failed to create tool' }, { status: 500 });
 	}
-
-	if (!label || typeof label !== 'string' || label.trim() === '') {
-		return json({ error: 'Label is required' }, { status: 400 });
-	}
-
-	const result = await db
-		.insert(tools)
-		.values({
-			label: label.trim(),
-			description: description?.trim() || null,
-			notes: notes?.trim() || null,
-			imagePath,
-			locationId,
-			isBorrowed: false
-		})
-		.returning();
-
-	return json(result[0], { status: 201 });
 };

@@ -3,6 +3,7 @@ import { db } from '$lib/db';
 import { locations } from '$lib/db/schema';
 import { eq, isNull } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
+import { logger } from '$lib/logger';
 
 // GET /api/locations - List all locations with hierarchy
 export const GET: RequestHandler = async ({ url }) => {
@@ -29,11 +30,13 @@ export const GET: RequestHandler = async ({ url }) => {
 };
 
 // POST /api/locations - Create a new location
-export const POST: RequestHandler = async ({ request }) => {
+export const POST: RequestHandler = async ({ request, locals }) => {
+	const log = locals.log || logger;
 	const body = await request.json();
 	const { name, description, parentId } = body;
 
 	if (!name || typeof name !== 'string' || name.trim() === '') {
+		log.warn('Location creation failed: name is required');
 		return json({ error: 'Name is required' }, { status: 400 });
 	}
 
@@ -46,5 +49,6 @@ export const POST: RequestHandler = async ({ request }) => {
 		})
 		.returning();
 
+	log.info({ locationId: result[0].id, name: result[0].name, parentId }, 'Location created');
 	return json(result[0], { status: 201 });
 };

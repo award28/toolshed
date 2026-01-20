@@ -63,6 +63,7 @@ RESTful endpoints under `/api/`:
 
 - `DATABASE_URL` (required): PostgreSQL connection string
 - `PORT` (optional): Server port, defaults to 3000
+- `LOG_LEVEL` (optional): Logging level (trace, debug, info, warn, error, fatal). Defaults to "debug" in dev, "info" in production
 
 ## Svelte 5 Patterns
 
@@ -71,6 +72,17 @@ This project uses Svelte 5 runes:
 - `$derived()` for computed values
 - `$effect()` for side effects
 - `$props()` for component props
+
+## Logging
+
+The application uses [pino](https://getpino.io/) for structured JSON logging:
+
+- `src/lib/logger.ts` - Logger configuration and factory
+- Request logging in `hooks.server.ts` captures timing, status codes, and errors
+- Each request gets a unique `X-Request-ID` header for tracing
+- API endpoints log CRUD operations with relevant context
+
+Logs are JSON-formatted in production (for Loki/Grafana) and pretty-printed in development.
 
 ## Notes
 

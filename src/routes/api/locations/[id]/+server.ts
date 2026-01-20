@@ -3,6 +3,7 @@ import { db } from '$lib/db';
 import { locations } from '$lib/db/schema';
 import { eq } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
+import { logger } from '$lib/logger';
 
 // GET /api/locations/:id - Get single location
 export const GET: RequestHandler = async ({ params }) => {
@@ -21,7 +22,8 @@ export const GET: RequestHandler = async ({ params }) => {
 };
 
 // PUT /api/locations/:id - Update location
-export const PUT: RequestHandler = async ({ params, request }) => {
+export const PUT: RequestHandler = async ({ params, request, locals }) => {
+	const log = locals.log || logger;
 	const id = parseInt(params.id);
 	if (isNaN(id)) {
 		throw error(400, 'Invalid location ID');
@@ -32,6 +34,7 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 
 	// Prevent setting parent to self
 	if (parentId && parseInt(parentId) === id) {
+		log.warn({ locationId: id }, 'Location cannot be its own parent');
 		return json({ error: 'Location cannot be its own parent' }, { status: 400 });
 	}
 
@@ -64,11 +67,13 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 		throw error(404, 'Location not found');
 	}
 
+	log.info({ locationId: id, fields: Object.keys(updateData) }, 'Location updated');
 	return json(result[0]);
 };
 
 // DELETE /api/locations/:id - Delete location
-export const DELETE: RequestHandler = async ({ params }) => {
+export const DELETE: RequestHandler = async ({ params, locals }) => {
+	const log = locals.log || logger;
 	const id = parseInt(params.id);
 	if (isNaN(id)) {
 		throw error(400, 'Invalid location ID');
@@ -80,5 +85,6 @@ export const DELETE: RequestHandler = async ({ params }) => {
 		throw error(404, 'Location not found');
 	}
 
+	log.info({ locationId: id, name: result[0].name }, 'Location deleted');
 	return json({ success: true });
 };

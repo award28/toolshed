@@ -6,6 +6,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { writeFile, unlink, mkdir } from 'fs/promises';
 import path from 'path';
 import type { RequestHandler } from './$types';
+import { logger } from '$lib/logger';
 
 // GET /api/tools/:id - Get single tool with location info
 export const GET: RequestHandler = async ({ params }) => {
@@ -32,7 +33,8 @@ export const GET: RequestHandler = async ({ params }) => {
 };
 
 // PUT /api/tools/:id - Update tool
-export const PUT: RequestHandler = async ({ params, request }) => {
+export const PUT: RequestHandler = async ({ params, request, locals }) => {
+	const log = locals.log || logger;
 	const id = parseInt(params.id);
 	if (isNaN(id)) {
 		throw error(400, 'Invalid tool ID');
@@ -168,11 +170,13 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 
 	const result = await db.update(tools).set(updateData).where(eq(tools.id, id)).returning();
 
+	log.info({ toolId: id, fields: Object.keys(updateData) }, 'Tool updated');
 	return json(result[0]);
 };
 
 // DELETE /api/tools/:id - Delete tool
-export const DELETE: RequestHandler = async ({ params }) => {
+export const DELETE: RequestHandler = async ({ params, locals }) => {
+	const log = locals.log || logger;
 	const id = parseInt(params.id);
 	if (isNaN(id)) {
 		throw error(400, 'Invalid tool ID');
@@ -189,6 +193,7 @@ export const DELETE: RequestHandler = async ({ params }) => {
 		try {
 			const imagePath = path.resolve('.' + currentTool[0].imagePath);
 			await unlink(imagePath);
+			log.debug({ imagePath }, 'Tool image deleted');
 		} catch {
 			// Ignore if file doesn't exist
 		}
@@ -196,5 +201,6 @@ export const DELETE: RequestHandler = async ({ params }) => {
 
 	await db.delete(tools).where(eq(tools.id, id));
 
+	log.info({ toolId: id, label: currentTool[0].label }, 'Tool deleted');
 	return json({ success: true });
 };
